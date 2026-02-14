@@ -1,95 +1,67 @@
-use crate::ast::{BinOp, Expression, FunctionDeclaration, Program, Statement, UnOp};
+use std::fmt;
+use crate::ir::{Program, Function, Instruction, Operand, Reg};
 
-pub fn generate(program: &Program) -> String {
-    let mut asm = String::new();
 
-    asm.push_str("    .intel_syntax noprefix\n");
-
-    gen_function(&program.function, &mut asm);
-
-    asm
-}
-
-fn gen_function(func: &FunctionDeclaration, asm: &mut String) {
-    asm.push_str(&format!("    .globl {}\n", func.name));
-
-    asm.push_str(&format!("{}:\n", func.name));
-
-    gen_statement(&func.body, asm);
-}
-
-fn gen_statement(statement: &Statement, asm: &mut String) {
-    match statement {
-        Statement::Return(expr) => {
-            gen_expression(expr, asm);
-
-            asm.push_str("    ret\n");
+impl fmt::Display for Reg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Reg::RAX => write!(f, "rax"),
+            Reg::RCX => write!(f, "rcx"),
+            Reg::AL => write!(f, "al"),
         }
     }
 }
 
-fn gen_expression(expr: &Expression, asm: &mut String) {
-    match expr {
-        Expression::Constant(val) => {
-            asm.push_str(&format!("    mov rax, {}\n", val));
+impl fmt::Display for Operand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Operand::Imm(val) => write!(f, "{}", val),
+            Operand::Reg(reg) => write!(f, "{}", reg), 
+        }
+    }
+}
+
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Instruction::Mov(dst, src) => write!(f, "    mov {}, {}", dst, src),
+            Instruction::Add(dst, src) => write!(f, "    add {}, {}", dst, src),
+            Instruction::Sub(dst, src) => write!(f, "    sub {}, {}", dst, src),
+            Instruction::Imul(dst, src) => write!(f, "    imul {}, {}", dst, src),
+            Instruction::Cmp(dst, src) => write!(f, "    cmp {}, {}", dst, src),
+
+            Instruction::Idiv(op) => write!(f, "    idiv {}", op),
+            Instruction::Neg(op) => write!(f, "    neg {}", op),
+            Instruction::Not(op) => write!(f, "    not {}", op),
+            Instruction::Push(op) => write!(f, "    push {}", op),
+            Instruction::Pop(op) => write!(f, "    pop {}", op),
+            Instruction::Sete(op) => write!(f, "    sete {}", op),
+
+            Instruction::Ret => write!(f, "    ret"),
+            Instruction::Cqo => write!(f, "    cqo"),
+        }
+    }
+}
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "{}:", self.name)?;
+
+        for instr in &self.instructions {
+            writeln!(f, "{}", instr)?; 
         }
         
-        Expression::UnaryOp((un_op,expression)) => {
-            gen_expression(expression, asm);
-            match un_op {
-                UnOp::Negation => {
-                    asm.push_str("    neg rax\n");
-                }
+        Ok(())
+    }
+}
 
-                UnOp::BitwiseComplement=> {
-
-                    asm.push_str("    not rax\n");
-
-                }
-
-                UnOp::LogicalNegation=> {
-
-                    asm.push_str("    cmp rax, 0\n");
-                    asm.push_str("    mov rax,0\n");
-                    asm.push_str("    sete al\n");
-                }
-            } 
-
-        }
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "    .intel_syntax noprefix")?;
         
-        Expression::BinaryOp(binop,left ,right ) => {
-            gen_expression(right, asm);
-            match binop {
-                BinOp::Add => {
-                    asm.push_str("    push rax\n");
-                    gen_expression(left, asm);
-                    asm.push_str("    pop rcx\n");
-                    asm.push_str("    add rax,rcx\n");
-                }
+        writeln!(f, "    .globl {}", self.function.name)?;
 
-                BinOp::Multiply=> {
-                    asm.push_str("    push rax\n");
-                    gen_expression(left, asm);
-                    asm.push_str("    pop rcx\n");
-                    asm.push_str("    imul rax,rcx\n");
-                }
+        write!(f, "{}", self.function)?; 
 
-                BinOp::Subtract=> {
-                    asm.push_str("    push rax\n");
-                    gen_expression(left, asm);
-                    asm.push_str("    pop rcx\n");
-                    asm.push_str("    sub rax,rcx\n");
-                }
-
-                BinOp::Divide => {
-                    asm.push_str("    push rax\n");
-                    gen_expression(left, asm);
-                    asm.push_str("    cqo\n");
-                    asm.push_str("    pop rcx\n");
-                    asm.push_str("    idiv rcx\n");
-                }
-            }
-
-        }
+        writeln!(f, "    .section .note.GNU-stack,\"\",@progbits")
     }
 }

@@ -2,6 +2,8 @@ mod ast;
 mod codegen;
 mod lexer;
 mod parser;
+mod ir_gen;
+mod ir;
 
 use std::env;
 use std::fs;
@@ -45,8 +47,8 @@ fn main() {
             std::process::exit(1);
         }
     };
-
-    let assembly = codegen::generate(&ast);
+    let asm_program = ir_gen::generate(&ast);
+    let assembly = asm_program.to_string();
 
     if let Err(e) = fs::write(&asm_path, assembly) {
         eprintln!("Failed to write assembly file: {}", e);
