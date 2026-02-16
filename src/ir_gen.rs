@@ -1,105 +1,84 @@
-use crate::ast::{BinOp, Expression, FunctionDeclaration, Program as AstProgram, Statement, UnOp};
-use crate::ir::{
-    Function as AsmFunction, Instruction::{self, *}, Operand::*, Program as AsmProgram, Reg::*,
-};
+use crate::ast;
+use crate::ir::{self, Instruction, Val};
 
-pub fn generate(program: &AstProgram) -> AsmProgram {
-    let function = gen_function(&program.function);
-    AsmProgram { function }
+struct Generator {
+    instructions: Vec<Instruction>,
+    temp_counter: usize,
 }
 
-fn gen_function(func: &FunctionDeclaration) -> AsmFunction {
-    let mut instructions = Vec::new();
-
-    instructions.extend(gen_statement(&func.body));
-
-    AsmFunction {
-        name: func.name.clone(),
-        instructions,
-    }
-}
-
-fn gen_statement(statement: &Statement) -> Vec<Instruction> {
-    let mut instructions = Vec::new();
-
-    match statement {
-        Statement::Return(expr) => {
-            instructions.extend(gen_expression(expr));
-            instructions.push(Ret);
+impl Generator {
+    fn new() -> Self {
+        Self {
+            instructions: Vec::new(),
+            temp_counter: 0,
         }
     }
-    instructions
-}
 
-fn gen_expression(expr: &Expression) -> Vec<Instruction> {
-    let mut instructions = Vec::new();
+    fn make_temporary(&mut self) -> Val {
+        let name = format!("temp.{}",self.temp_counter);
+        self.temp_counter += 1;
+        Val::Var(name)
+    }
 
-    match expr {
-        Expression::Constant(val) => {
-            // mov rax, val
-            instructions.push(Mov(Reg(RAX), Imm(*val)));
-        }
 
-        Expression::UnaryOp((un_op, expression)) => {
-            instructions.extend(gen_expression(expression));
-            match un_op {
-                UnOp::Negation => {
-                    // neg rax
-                    instructions.push(Neg(Reg(RAX)));
-                }
-                UnOp::BitwiseComplement => {
-                    // not rax
-                    instructions.push(Not(Reg(RAX)));
-                }
-                UnOp::LogicalNegation => {
-                    // cmp rax, 0
-                    instructions.push(Cmp(Reg(RAX), Imm(0)));
-                    // mov rax, 0 (Zero out RAX)
-                    instructions.push(Mov(Reg(RAX), Imm(0)));
-                    // sete al (Set lower byte to 1 if equal, 0 otherwise)
-                    instructions.push(Sete(Reg(AL)));
-                }
+    fn emit_expression(&mut self, expr: &ast::Expression) -> Val {
+        match expr {
+            ast::Expression::Constant(c) => Val::Constant(*c),
+            
+            ast::Expression::UnaryOp((op, inner)) => {
+                let src = self.emit_expression(inner);
+                
+                let dst = self.make_temporary();
+                
+                let tacky_op = match op {
+                    ast::UnOp::Negation => ir::UnaryOp::Negation,
+                    ast::UnOp::BitwiseComplement => ir::UnaryOp::BitwiseComplement,
+                    ast::UnOp::LogicalNegation => ir::UnaryOp::LogicalNegation,
+                };
+
+                self.instructions.push(Instruction::Unary(tacky_op, src, dst.clone()));
+                
+                dst
             }
-        }
 
-        Expression::BinaryOp(binop, left, right) => {
-            // Eval Right -> Push -> Eval Left -> Pop -> Op
+            ast::Expression::BinaryOp(op, left, right) => {
+                let v1 = self.emit_expression(left);
+                let v2 = self.emit_expression(right);
+                
+                let dst = self.make_temporary();
 
-            //  Evaluate Right
-            instructions.extend(gen_expression(right));
+                let tacky_op = match op {
+                    ast::BinOp::Add => ir::BinaryOp::Add,
+                    ast::BinOp::Subtract => ir::BinaryOp::Subtract,
+                    ast::BinOp::Multiply => ir::BinaryOp::Multiply,
+                    ast::BinOp::Divide => ir::BinaryOp::Divide,
+                    ast::BinOp::Remainder=> ir::BinaryOp::Remainder,
+                };
 
-            //  Push result (RAX) to stack
-            instructions.push(Push(Reg(RAX)));
+                self.instructions.push(Instruction::Binary(tacky_op, v1, v2, dst.clone()));
 
-            //  Evaluate Left
-            instructions.extend(gen_expression(left));
-
-            //  Pop previous result into RCX
-            instructions.push(Pop(Reg(RCX)));
-
-            //  Perform Operation
-            match binop {
-                BinOp::Add => {
-                    // add rax, rcx
-                    instructions.push(Add(Reg(RAX), Reg(RCX)));
-                }
-                BinOp::Multiply => {
-                    // imul rax, rcx
-                    instructions.push(Imul(Reg(RAX), Reg(RCX)));
-                }
-                BinOp::Subtract => {
-                    // sub rax, rcx
-                    instructions.push(Sub(Reg(RAX), Reg(RCX)));
-                }
-                BinOp::Divide => {
-                    // cqo (Sign extend RAX for division)
-                    instructions.push(Cqo);
-                    // idiv rcx
-                    instructions.push(Idiv(Reg(RCX)));
-                }
+                dst
             }
         }
     }
 
-    instructions
+    fn emit_function(mut self, func: &ast::FunctionDeclaration) -> ir::Function {
+        match &func.body {
+            ast::Statement::Return(expr) => {
+                let val = self.emit_expression(expr);
+                self.instructions.push(Instruction::Return(val));
+            }
+        }
+
+        ir::Function {
+            name: func.name.clone(),
+            instructions: self.instructions,
+        }
+    }
+}
+
+pub fn generate(program: &ast::Program) -> ir::Program {
+    let generator = Generator::new();
+    let function = generator.emit_function(&program.function);
+    ir::Program { function }
 }

@@ -19,6 +19,7 @@ pub enum BinOp {
     Subtract,
     Multiply,
     Divide,
+    Remainder,
 }
 
 #[derive(Debug, PartialEq)]

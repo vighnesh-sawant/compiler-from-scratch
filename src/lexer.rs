@@ -21,6 +21,8 @@ pub enum Token {
     Addition,            // +
     Multiplication,      // *
     Division,            // /
+    Decrement,
+    Remainder,
 }
 
 #[derive(Debug)]
@@ -75,9 +77,19 @@ pub fn lex<P: AsRef<Path>>(file_path: P) -> Result<Vec<Token>, LexError> {
                 pos += 1;
             }
             '-' => {
-                tokens.push(Token::Negation);
                 chars.next();
                 pos += 1;
+
+                match chars.peek() {
+                    Some(&'-') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::Decrement);
+                    }
+                    _ => {
+                        tokens.push(Token::Negation);
+                    }
+                }
             }
             '~' => {
                 tokens.push(Token::BitwiseComplement);
@@ -104,7 +116,11 @@ pub fn lex<P: AsRef<Path>>(file_path: P) -> Result<Vec<Token>, LexError> {
                 chars.next();
                 pos += 1;
             }
-
+            '%' => {
+                tokens.push(Token::Remainder);
+                chars.next();
+                pos += 1;
+            }
             c if c.is_ascii_alphabetic() => {
                 let text = consume_while(&mut chars, |ch| ch.is_ascii_alphanumeric() || ch == '_');
                 pos += text.len();

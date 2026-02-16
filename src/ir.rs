@@ -1,37 +1,30 @@
-#[derive(Debug, Clone, PartialEq)]
-pub enum Reg {
-    RAX,
-    RCX, // We only need these two for now based on your code
-    AL, // Lower 8 bits of AX (needed for 'sete')
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+    Negation,
+    BitwiseComplement,
+    LogicalNegation,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Operand {
-    Imm(i32),
-    Reg(Reg),
+#[derive(Debug, Clone)]
+pub enum BinaryOp {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
+pub enum Val {
+    Constant(i32),
+    Var(String), // Represents both variable names ("x") and temporaries ("tmp.0")
+}
+
+#[derive(Debug, Clone)]
 pub enum Instruction {
-    Mov(Operand, Operand),  // mov dst, src
-    Add(Operand, Operand),  // add dst, src
-    Sub(Operand, Operand),  // sub dst, src
-    Imul(Operand, Operand), // imul dst, src
-    Idiv(Operand),          // idiv src (implicit rax/rdx)
-
-    // Unary
-    Neg(Operand), // neg dst
-    Not(Operand), // not dst
-
-    // Stack
-    Push(Operand),
-    Pop(Operand),
-
-    // Control / Comparison
-    Ret,
-    Cmp(Operand, Operand),
-    Sete(Operand), // sete dst
-    Cqo,           // Sign extend rax into rdx:rax
+    Return(Val),
+    Unary(UnaryOp, Val, Val),       // op src, dst
+    Binary(BinaryOp, Val, Val, Val), // op src1, src2, dst
 }
 
 #[derive(Debug)]
