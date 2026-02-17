@@ -18,13 +18,16 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary_name: c-compiler 
+            binary_name: compiler-from-scratch 
           - os: macos-latest
             target: x86_64-apple-darwin
-            binary_name: c-compiler 
+            binary_name: compiler-from-scratch 
+          - os: macos-latest
+            target: aarch64-apple-darwin 
+            binary_name: compiler-from-scratch 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            binary_name: c-compiler.exe 
+            binary_name: compiler-from-scratch.exe 
 
     steps:
       - name: Checkout repository
