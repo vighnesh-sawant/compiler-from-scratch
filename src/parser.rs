@@ -10,6 +10,43 @@ pub enum ParseError {
     UnexpectedEOF,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Precedence {
+    None,
+    LogicalOr,
+    LogicalAnd,
+    Equality,
+    Compartors,
+    BitwiseOr,
+    BitwiseXor,
+    BitwiseAnd,
+    BitwiseShift,
+    Term,   // + -
+    Factor, // * / %
+}
+
+impl Token {
+    fn get_precedence(&self) -> Precedence {
+        match self {
+            Token::LogicalOr => Precedence::LogicalOr,
+            Token::LogicalAnd => Precedence::LogicalAnd,
+            Token::Equal => Precedence::Equality,
+            Token::NotEqual => Precedence::Equality,
+            Token::LessThan => Precedence::Compartors,
+            Token::LessThanEqual => Precedence::Compartors,
+            Token::GreaterThan => Precedence::Compartors,
+            Token::GreaterThanEqual => Precedence::Compartors,
+            Token::BitwiseOr => Precedence::BitwiseOr,
+            Token::BitwiseXor => Precedence::BitwiseXor,
+            Token::BitwiseAnd => Precedence::BitwiseAnd,
+            Token::LeftShift | Token::RightShift => Precedence::BitwiseShift,
+            Token::Addition | Token::Negation => Precedence::Term,
+            Token::Multiplication | Token::Division | Token::Remainder => Precedence::Factor,
+            _ => Precedence::None,
+        }
+    }
+}
+
 pub struct Parser {
     tokens: Peekable<IntoIter<Token>>,
 }
@@ -73,43 +110,62 @@ impl Parser {
     fn parse_statement(&mut self) -> Result<Statement, ParseError> {
         self.expect(Token::ReturnKeyword)?;
 
-        let expr = self.parse_expression()?;
+        let expr = self.parse_expression(&Precedence::None)?;
 
         self.expect(Token::Semicolon)?;
 
         Ok(Statement::Return(expr))
     }
 
-    fn parse_expression(&mut self) -> Result<Expression, ParseError> {
-        let mut left = self.parse_term().unwrap();
-        while let Some(Token::Addition) | Some(Token::Negation) = self.tokens.peek() {
-            let op_token = self.tokens.next().unwrap();
+fn parse_expression(&mut self, min_prec: &Precedence) -> Result<Expression, ParseError> {
+        let mut left = self.parse_factor().unwrap();
 
-            let right = self.parse_term().unwrap();
+        while let Some(Token::Addition)
+        | Some(Token::Negation)
+        | Some(Token::Division)
+        | Some(Token::Multiplication)
+        | Some(Token::Remainder)
+        | Some(Token::BitwiseOr)
+        | Some(Token::BitwiseXor)
+        | Some(Token::BitwiseAnd)
+        | Some(Token::LogicalOr)
+        | Some(Token::LogicalAnd)
+        | Some(Token::LeftShift)
+        | Some(Token::RightShift)
+        | Some(Token::Equal)
+        | Some(Token::NotEqual)
+        | Some(Token::LessThan)
+        | Some(Token::LessThanEqual)
+        | Some(Token::GreaterThan)
+        | Some(Token::GreaterThanEqual) = self.tokens.peek()
+        {
+            let prec = self.tokens.peek().unwrap().get_precedence();
+            if prec <= *min_prec {
+                return Ok(left);
+            }
+
+            let op_token = self.tokens.next().unwrap();
+            let right = self.parse_expression(&prec).unwrap();
 
             let bin_op = match op_token {
                 Token::Addition => BinOp::Add,
                 Token::Negation => BinOp::Subtract,
-                _ => unreachable!(),
-            };
-
-            left = Expression::BinaryOp(bin_op, Box::new(left), Box::new(right));
-        }
-
-        Ok(left)
-    }
-
-    fn parse_term(&mut self) -> Result<Expression, ParseError> {
-        let mut left = self.parse_factor().unwrap();
-
-        while let Some(Token::Multiplication) | Some(Token::Division) = self.tokens.peek() {
-            let op_token = self.tokens.next().unwrap();
-
-            let right = self.parse_factor().unwrap();
-
-            let bin_op = match op_token {
-                Token::Multiplication => BinOp::Multiply,
                 Token::Division => BinOp::Divide,
+                Token::Multiplication => BinOp::Multiply,
+                Token::Remainder => BinOp::Remainder,
+                Token::BitwiseOr => BinOp::BitwiseOr,
+                Token::BitwiseAnd => BinOp::BitwiseAnd,
+                Token::BitwiseXor => BinOp::BitwiseXor,
+                Token::LogicalAnd=> BinOp::LogicalAnd,
+                Token::LogicalOr=> BinOp::LogicalOr,
+                Token::LeftShift => BinOp::LeftShift,
+                Token::RightShift => BinOp::RightShift,
+                Token::Equal => BinOp::Equal,
+                Token::NotEqual => BinOp::NotEqual,
+                Token::LessThan => BinOp::LessThan,
+                Token::LessThanEqual => BinOp::LessThanEqual,
+                Token::GreaterThan => BinOp::GreaterThan,
+                Token::GreaterThanEqual => BinOp::GreaterThanEqual,
                 _ => unreachable!(),
             };
 
@@ -122,7 +178,7 @@ impl Parser {
     fn parse_factor(&mut self) -> Result<Expression, ParseError> {
         match self.tokens.next() {
             Some(Token::OpenParen) => {
-                let result = self.parse_expression();
+                let result = self.parse_expression(&Precedence::None);
                 let _ = self.expect(Token::CloseParen);
                 result
             }

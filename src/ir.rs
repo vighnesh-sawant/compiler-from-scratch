@@ -12,6 +12,17 @@ pub enum BinaryOp {
     Multiply,
     Divide,
     Remainder,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    LeftShift,
+    RightShift,
+    LessThan,
+    GreaterThan,
+    LessThanEqual,
+    GreaterThanEqual,
+    NotEqual,
+    Equal,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +36,11 @@ pub enum Instruction {
     Return(Val),
     Unary(UnaryOp, Val, Val),       // op src, dst
     Binary(BinaryOp, Val, Val, Val), // op src1, src2, dst
+    Copy(Val, Val),                    //dst,src 
+    Jump(String),                      // target
+    JumpIfZero(Val, String),           // condition, target
+    JumpIfNotZero(Val, String),        // condition, target
+    Label(String),                     // label_name
 }
 
 #[derive(Debug)]

@@ -52,12 +52,28 @@ pub enum Operand {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum CondCode {
+    MP, //uncond
+    E,
+    NE,
+    G,
+    GE,
+    L,
+    LE,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     Mov(Operand, Operand),  // mov dst, src
     Add(Operand, Operand),  // add dst, src
     Sub(Operand, Operand),  // sub dst, src
     Imul(Operand, Operand), // imul dst, src
     Idiv(Operand),          // idiv src (implicit rax/rdx)
+    And(Operand, Operand),  // add dst, src
+    Or(Operand, Operand),   // add dst, src
+    Xor(Operand, Operand),  // add dst, src
+    Sal(Operand, Operand),
+    Sar(Operand, Operand),
 
     // Unary
     Neg(Operand), // neg dst
@@ -70,8 +86,10 @@ pub enum Instruction {
     // Control / Comparison
     Ret,
     Cmp(Operand, Operand),
-    Sete(Operand), // sete dst
-    Cqo,           // Sign extend rax into rdx:rax
+    SetCC(CondCode, Operand),
+    JumpCC(CondCode, String),
+    Label(String),
+    Cqo, // Sign extend rax into rdx:rax
 }
 
 #[derive(Debug)]
@@ -121,13 +139,33 @@ impl fmt::Display for Operand {
     }
 }
 
+impl fmt::Display for CondCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CondCode::MP => write! {f,"mp"},
+            CondCode::E => write! {f,"e"},
+            CondCode::NE => write! {f,"ne"},
+            CondCode::G => write! {f,"g"},
+            CondCode::GE => write! {f,"ge"},
+            CondCode::L => write! {f,"l"},
+            CondCode::LE => write! {f,"le"},
+        }
+    }
+}
+
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Instruction::Mov(dst, src) => write!(f, "    mov {}, {}", dst, src),
             Instruction::Add(dst, src) => write!(f, "    add {}, {}", dst, src),
+            Instruction::And(dst, src) => write!(f, "    and {}, {}", dst, src),
+            Instruction::Or(dst, src) => write!(f, "    or {}, {}", dst, src),
+            Instruction::Xor(dst, src) => write!(f, "    xor {}, {}", dst, src),
             Instruction::Sub(dst, src) => write!(f, "    sub {}, {}", dst, src),
             Instruction::Imul(dst, src) => write!(f, "    imul {}, {}", dst, src),
+
+            Instruction::Sal(dst, src) => write!(f, "    sal {}, {}", dst, src),
+            Instruction::Sar(dst, src) => write!(f, "    sar {}, {}", dst, src),
             Instruction::Cmp(dst, src) => write!(f, "    cmp {}, {}", dst, src),
 
             Instruction::Idiv(op) => write!(f, "    idiv {}", op),
@@ -135,8 +173,10 @@ impl fmt::Display for Instruction {
             Instruction::Not(op) => write!(f, "    not {}", op),
             Instruction::Push(op) => write!(f, "    push {}", op),
             Instruction::Pop(op) => write!(f, "    pop {}", op),
-            Instruction::Sete(op) => write!(f, "    sete {}", op),
+            Instruction::SetCC(cc, op) => write!(f, "    set{} {}", cc, op),
+            Instruction::JumpCC(cc, op) => write!(f, "    j{} {}", cc, op),
 
+            Instruction::Label(label) => write!(f, "{}:", label),
             Instruction::Ret => write!(f, "    ret"),
             Instruction::Cqo => write!(f, "    cqo"),
         }
@@ -181,6 +221,18 @@ fn select_instructions(ir_fn: &ir::Function) -> Vec<Instruction> {
                         insts.push(Instruction::Mov(d.clone(), s1));
                         insts.push(Instruction::Add(d, s2));
                     }
+                    ir::BinaryOp::BitwiseAnd => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::And(d, s2));
+                    }
+                    ir::BinaryOp::BitwiseOr => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Or(d, s2));
+                    }
+                    ir::BinaryOp::BitwiseXor => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Xor(d, s2));
+                    }
                     ir::BinaryOp::Subtract => {
                         insts.push(Instruction::Mov(d.clone(), s1));
                         insts.push(Instruction::Sub(d, s2));
@@ -188,6 +240,51 @@ fn select_instructions(ir_fn: &ir::Function) -> Vec<Instruction> {
                     ir::BinaryOp::Multiply => {
                         insts.push(Instruction::Mov(d.clone(), s1));
                         insts.push(Instruction::Imul(d, s2));
+                    }
+                    ir::BinaryOp::LeftShift => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Sal(d, s2));
+                    }
+                    ir::BinaryOp::RightShift => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Sar(d, s2));
+                    }
+                    ir::BinaryOp::NotEqual => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Cmp(d.clone(), s2));
+                        insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
+                        insts.push(Instruction::SetCC(CondCode::NE, d));
+                    }
+                    ir::BinaryOp::Equal => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Cmp(d.clone(), s2));
+                        insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
+                        insts.push(Instruction::SetCC(CondCode::E, d));
+                    }
+                    ir::BinaryOp::LessThan => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Cmp(d.clone(), s2));
+                        insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
+                        insts.push(Instruction::SetCC(CondCode::L, d));
+                    }
+
+                    ir::BinaryOp::LessThanEqual => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Cmp(d.clone(), s2));
+                        insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
+                        insts.push(Instruction::SetCC(CondCode::LE, d));
+                    }
+                    ir::BinaryOp::GreaterThan => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Cmp(d.clone(), s2));
+                        insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
+                        insts.push(Instruction::SetCC(CondCode::G, d));
+                    }
+                    ir::BinaryOp::GreaterThanEqual => {
+                        insts.push(Instruction::Mov(d.clone(), s1));
+                        insts.push(Instruction::Cmp(d.clone(), s2));
+                        insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
+                        insts.push(Instruction::SetCC(CondCode::GE, d));
                     }
 
                     // Division / Remainder
@@ -220,21 +317,33 @@ fn select_instructions(ir_fn: &ir::Function) -> Vec<Instruction> {
                         insts.push(Instruction::Not(d));
                     }
                     ir::UnaryOp::LogicalNegation => {
-                        if let Operand::Imm(val) = &s {
-                            if *val == 0 {
-                                insts.push(Instruction::Mov(d.clone(), Operand::Imm(1)));
-                            } else {
-                                insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
-                            }
-                        } else {
-                            insts.push(Instruction::Cmp(s, Operand::Imm(0)));
-
-                            insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
-
-                            insts.push(Instruction::Sete(d));
-                        }
+                        insts.push(Instruction::Cmp(s, Operand::Imm(0)));
+                        insts.push(Instruction::Mov(d.clone(), Operand::Imm(0)));
+                        insts.push(Instruction::SetCC(CondCode::E, d));
                     }
                 }
+            }
+
+            ir::Instruction::Copy(dst, src) => {
+                insts.push(Instruction::Mov(to_operand(dst), to_operand(src)));
+            }
+
+            ir::Instruction::Jump(label) => {
+                insts.push(Instruction::JumpCC(CondCode::MP, label.clone()))
+            }
+
+            ir::Instruction::JumpIfZero(op, label) => {
+                insts.push(Instruction::Cmp(to_operand(op), Operand::Imm(0)));
+                insts.push(Instruction::JumpCC(CondCode::E, label.clone()));
+            }
+
+            ir::Instruction::JumpIfNotZero(op, label) => {
+                insts.push(Instruction::Cmp(to_operand(op), Operand::Imm(0)));
+                insts.push(Instruction::JumpCC(CondCode::NE, label.clone()));
+            }
+
+            ir::Instruction::Label(label) => {
+                insts.push(Instruction::Label(label.clone()));
             }
 
             ir::Instruction::Return(val) => {
@@ -272,10 +381,27 @@ fn allocate_stack(insts: Vec<Instruction>) -> (Vec<Instruction>, i32) {
             Instruction::Add(dst, src) => {
                 Instruction::Add(replace_operand(&dst), replace_operand(&src))
             }
+            Instruction::And(dst, src) => {
+                Instruction::And(replace_operand(&dst), replace_operand(&src))
+            }
+            Instruction::Or(dst, src) => {
+                Instruction::Or(replace_operand(&dst), replace_operand(&src))
+            }
+            Instruction::Xor(dst, src) => {
+                Instruction::Xor(replace_operand(&dst), replace_operand(&src))
+            }
             Instruction::Sub(dst, src) => {
                 Instruction::Sub(replace_operand(&dst), replace_operand(&src))
             }
             Instruction::Imul(dst, src) => {
+                Instruction::Imul(replace_operand(&dst), replace_operand(&src))
+            }
+
+            Instruction::Sal(dst, src) => {
+                Instruction::Sal(replace_operand(&dst), replace_operand(&src))
+            }
+
+            Instruction::Sar(dst, src) => {
                 Instruction::Imul(replace_operand(&dst), replace_operand(&src))
             }
             Instruction::Cmp(dst, src) => {
@@ -287,8 +413,10 @@ fn allocate_stack(insts: Vec<Instruction>) -> (Vec<Instruction>, i32) {
             Instruction::Not(op) => Instruction::Not(replace_operand(&op)),
             Instruction::Push(op) => Instruction::Push(replace_operand(&op)),
             Instruction::Pop(op) => Instruction::Pop(replace_operand(&op)),
-            Instruction::Sete(op) => Instruction::Sete(replace_operand(&op)),
+            Instruction::SetCC(cc, op) => Instruction::SetCC(cc, replace_operand(&op)),
+            Instruction::JumpCC(cc, op) => Instruction::JumpCC(cc, op),
 
+            Instruction::Label(label) => Instruction::Label(label),
             Instruction::Ret => Instruction::Ret,
             Instruction::Cqo => Instruction::Cqo,
         };
@@ -304,7 +432,10 @@ fn fix_instructions(insts: Vec<Instruction>) -> Vec<Instruction> {
         match inst {
             Instruction::Add(ref dst, ref src)
             | Instruction::Sub(ref dst, ref src)
-            | Instruction::Cmp(ref dst, ref src) => {
+            | Instruction::Cmp(ref dst, ref src)
+            | Instruction::And(ref dst, ref src)
+            | Instruction::Or(ref dst, ref src)
+            | Instruction::Xor(ref dst, ref src) => {
                 // Check if BOTH are stack locations
                 if let (Operand::StackQWord(_), Operand::StackQWord(_)) = (&dst, &src) {
                     // Rewrite: add [mem], [mem]  ->  mov r10, [mem]; add r10, [mem]; mov [mem], r10
@@ -321,6 +452,15 @@ fn fix_instructions(insts: Vec<Instruction>) -> Vec<Instruction> {
                         Instruction::Sub(_, _) => {
                             Instruction::Sub(dst.clone(), Operand::Reg(Reg::R10))
                         }
+                        Instruction::And(_, _) => {
+                            Instruction::And(dst.clone(), Operand::Reg(Reg::R10))
+                        }
+                        Instruction::Or(_, _) => {
+                            Instruction::Or(dst.clone(), Operand::Reg(Reg::R10))
+                        }
+                        Instruction::Xor(_, _) => {
+                            Instruction::Xor(dst.clone(), Operand::Reg(Reg::R10))
+                        }
 
                         Instruction::Cmp(_, _) => {
                             Instruction::Cmp(dst.clone(), Operand::Reg(Reg::R10))
@@ -328,7 +468,15 @@ fn fix_instructions(insts: Vec<Instruction>) -> Vec<Instruction> {
                         _ => unreachable!(),
                     };
                     clean_insts.push(new_op);
-
+                } else if let (Operand::Imm(_), Operand::Imm(_)) = (&dst, &src) {
+                    let new_op = match inst {
+                        Instruction::Cmp(_, _) => {
+                            clean_insts.push(Instruction::Mov(Operand::Reg(Reg::R11), dst.clone()));
+                            Instruction::Cmp(Operand::Reg(Reg::R11), src.clone())
+                        }
+                        _ => inst,
+                    };
+                    clean_insts.push(new_op);
                 } else {
                     clean_insts.push(inst);
                 }
@@ -345,13 +493,26 @@ fn fix_instructions(insts: Vec<Instruction>) -> Vec<Instruction> {
                 }
             }
 
-            Instruction::Sete(ref dst) => {
+            Instruction::SetCC(ref cc, ref dst) => {
                 let inst = match dst {
-                    Operand::Reg(reg) => Instruction::Sete(Operand::Reg(reg.to_byte_reg())),
-                    Operand::StackQWord(offset) => Instruction::Sete(Operand::StackByte(*offset)),
+                    Operand::Reg(reg) => {
+                        Instruction::SetCC(cc.clone(), Operand::Reg(reg.to_byte_reg()))
+                    }
+                    Operand::StackQWord(offset) => {
+                        Instruction::SetCC(cc.clone(), Operand::StackByte(*offset))
+                    }
                     _ => unreachable!(),
                 };
                 clean_insts.push(inst);
+            }
+            Instruction::Sal(ref dst, ref src) => {
+                clean_insts.push(Instruction::Mov(Operand::Reg(Reg::Rcx), src.clone()));
+                clean_insts.push(Instruction::Sal(dst.clone(), Operand::Reg(Reg::Cl)));
+            }
+
+            Instruction::Sar(ref dst, ref src) => {
+                clean_insts.push(Instruction::Mov(Operand::Reg(Reg::Rcx), src.clone()));
+                clean_insts.push(Instruction::Sar(dst.clone(), Operand::Reg(Reg::Cl)));
             }
 
             Instruction::Idiv(ref src) => {
@@ -371,6 +532,15 @@ fn fix_instructions(insts: Vec<Instruction>) -> Vec<Instruction> {
                     clean_insts.push(Instruction::Mov(dst.clone(), Operand::Reg(Reg::R11)));
                 } else {
                     clean_insts.push(Instruction::Imul(dst.clone(), src.clone()));
+                }
+            }
+
+            Instruction::Cmp(ref dst, ref src) => {
+                if let (Operand::Imm(_), Operand::Imm(_)) = (&dst, &src) {
+                    clean_insts.push(Instruction::Mov(Operand::Reg(Reg::R11), dst.clone()));
+                    clean_insts.push(Instruction::Mov(Operand::Reg(Reg::R11), src.clone()));
+                } else {
+                    clean_insts.push(inst);
                 }
             }
 

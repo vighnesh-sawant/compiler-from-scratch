@@ -20,6 +20,19 @@ pub enum BinOp {
     Multiply,
     Divide,
     Remainder,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    LeftShift,
+    RightShift,
+    LessThan,
+    GreaterThan,
+    LessThanEqual,
+    GreaterThanEqual,
+    NotEqual,
+    Equal,
+    LogicalAnd,
+    LogicalOr,
 }
 
 #[derive(Debug, PartialEq)]

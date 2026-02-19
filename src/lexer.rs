@@ -23,6 +23,20 @@ pub enum Token {
     Division,            // /
     Decrement,
     Remainder,
+    BitwiseXor,
+    BitwiseAnd,
+    BitwiseOr,
+    LogicalAnd,
+    LogicalOr,
+    LeftShift,
+    RightShift,
+    LessThan,
+    GreaterThan,
+    LessThanEqual,
+    GreaterThanEqual,
+    NotEqual,
+    Equal,
+    Assign,
 }
 
 #[derive(Debug)]
@@ -91,15 +105,115 @@ pub fn lex<P: AsRef<Path>>(file_path: P) -> Result<Vec<Token>, LexError> {
                     }
                 }
             }
+            '&' => {
+                chars.next();
+                pos += 1;
+
+                match chars.peek() {
+                    Some(&'&') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::LogicalAnd);
+                    }
+                    _ => {
+                        tokens.push(Token::BitwiseAnd);
+                    }
+                }
+            }
+            '<' => {
+                chars.next();
+                pos += 1;
+
+                match chars.peek() {
+                    Some(&'<') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::LeftShift);
+                    }
+                    Some(&'=') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::LessThanEqual);
+                    }
+                    _ => {
+                        tokens.push(Token::LessThan);
+                    }
+                }
+            }
+            '>' => {
+                chars.next();
+                pos += 1;
+
+                match chars.peek() {
+                    Some(&'>') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::RightShift);
+                    }
+                    Some(&'=') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::GreaterThanEqual);
+                    }
+                    _ => {
+                        tokens.push(Token::GreaterThan);
+                    }
+                }
+            }
+            '=' => {
+                chars.next();
+                pos += 1;
+
+                match chars.peek() {
+                    Some(&'=') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::Equal);
+                    }
+                    _ => {
+                        tokens.push(Token::Assign);
+                    }
+                }
+            }
+            '|' => {
+                chars.next();
+                pos += 1;
+
+                match chars.peek() {
+                    Some(&'|') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::LogicalOr);
+                    }
+                    _ => {
+                        tokens.push(Token::BitwiseOr);
+                    }
+                }
+            }
+            '^' => {
+                tokens.push(Token::BitwiseXor);
+                chars.next();
+                pos += 1;
+            }
             '~' => {
                 tokens.push(Token::BitwiseComplement);
                 chars.next();
                 pos += 1;
             }
             '!' => {
-                tokens.push(Token::LogicalNegation);
                 chars.next();
                 pos += 1;
+
+                match chars.peek() {
+                    Some(&'=') => {
+                        chars.next();
+                        pos += 1;
+                        tokens.push(Token::NotEqual);
+                    }
+                    _ => {
+                        tokens.push(Token::LogicalNegation);
+                    }
+                }
             }
             '+' => {
                 tokens.push(Token::Addition);
