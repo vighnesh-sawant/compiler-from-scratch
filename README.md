@@ -15,7 +15,7 @@ it will compile the biniary in the directory where the source file is go there a
 then look at the return code echo $? that should give you the correct return code! 
 
 # Windows
-On windows please run ./compiler.exe c-file-name.c in the terminal 
+On windows please run this -> (the-name-of-the-file-you-downloaded.exe c-file-name.c) in the terminal 
 (check above instructions to get a c file that will compile) this should produce the compiled binary file.Run this also in the terminal 
 On windows to see result you have to run echo %ERRORLEVEL% in the terminal. This should print whatever the c file returns in main.
 
