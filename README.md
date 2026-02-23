@@ -20,4 +20,5 @@ On windows please run this -> (the-name-of-the-file-you-downloaded.exe c-file-na
 On windows to see result you have to run echo %ERRORLEVEL% in the terminal. This should print whatever the c file returns in main.
 
 
-You can also read c-file-name.s which my compiler produced to see the assembly produced, also you need to have gcc installed since I dont have my own assembler.
+You can also read c-file-name.s which my compiler produced to see the assembly produced,   
+**also you need to have gcc installed since I dont have my own assembler.**
