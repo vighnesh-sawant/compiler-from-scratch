@@ -200,9 +200,8 @@ impl fmt::Display for Program {
 
         writeln!(f, "    .globl {}", self.function.name)?;
 
-        write!(f, "{}", self.function)?;
+        write!(f, "{}", self.function)
 
-        writeln!(f, "    .section .note.GNU-stack,\"\",@progbits")
     }
 }
 
