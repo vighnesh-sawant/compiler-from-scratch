@@ -17,7 +17,7 @@ then look at the return code echo $? that should give you the correct return cod
 # Windows
 On windows please run this -> (the-name-of-the-file-you-downloaded.exe c-file-name.c) in the terminal 
 (check above instructions to get a c file that will compile) this should produce the compiled binary file.Run this also in the terminal 
-run c-file-name.exe in the command prompt    
+run c-file-name in the command prompt    
 On windows to see result you have to run echo %ERRORLEVEL% in the terminal. This should print whatever the c file returns in main.
 
 
