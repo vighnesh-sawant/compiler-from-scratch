@@ -106,21 +106,20 @@ pub struct Program {
 impl fmt::Display for Reg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            // 64-bit registers
-            Reg::Rax => write!(f, "rax"),
-            Reg::Rcx => write!(f, "rcx"),
-            Reg::Rdx => write!(f, "rdx"),
-            Reg::R10 => write!(f, "r10"),
-            Reg::R11 => write!(f, "r11"),
-            Reg::Rsp => write!(f, "rsp"),
-            Reg::Rbp => write!(f, "rbp"),
 
+            Reg::Rax => write!(f, "eax"),
+            Reg::Rcx => write!(f, "ecx"),
+            Reg::Rdx => write!(f, "edx"),
+            Reg::R10 => write!(f, "esi"),
+            Reg::R11 => write!(f, "edi"),
+            Reg::Rsp => write!(f, "esp"),
+            Reg::Rbp => write!(f, "ebp"),
             // 8-bit registers (Low Byte)
             Reg::Al => write!(f, "al"),
             Reg::Cl => write!(f, "cl"),
             Reg::Dl => write!(f, "dl"),
-            Reg::R10b => write!(f, "r10b"),
-            Reg::R11b => write!(f, "r11b"),
+            Reg::R10b => write!(f, "sil"),
+            Reg::R11b => write!(f, "dil"),
             Reg::Spl => write!(f, "spl"),
             Reg::Bpl => write!(f, "bpl"),
         }
@@ -132,8 +131,8 @@ impl fmt::Display for Operand {
         match self {
             Operand::Imm(val) => write!(f, "{}", val),
             Operand::Reg(reg) => write!(f, "{}", reg),
-            Operand::StackQWord(offset) => write!(f, "QWORD PTR [rbp{}]", offset),
-            Operand::StackByte(offset) => write!(f, "BYTE PTR [rbp{}]", offset),
+            Operand::StackQWord(offset) => write!(f, "DWORD PTR [ebp{}]", offset),
+            Operand::StackByte(offset) => write!(f, "BYTE PTR [ebp{}]", offset),
             Operand::Pseudo(_) => unreachable!(),
         }
     }
@@ -178,7 +177,7 @@ impl fmt::Display for Instruction {
 
             Instruction::Label(label) => write!(f, "{}:", label),
             Instruction::Ret => write!(f, "    ret"),
-            Instruction::Cqo => write!(f, "    cqo"),
+            Instruction::Cqo => write!(f, "    cdq"),
         }
     }
 }
@@ -198,9 +197,9 @@ impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "    .intel_syntax noprefix")?;
 
-        writeln!(f, "    .globl {}", self.function.name)?;
+        writeln!(f, "    .globl _{}", self.function.name)?;
 
-        write!(f, "{}", self.function)
+        write!(f, "_{}", self.function)
 
     }
 }
@@ -362,7 +361,7 @@ fn allocate_stack(insts: Vec<Instruction>) -> (Vec<Instruction>, i32) {
     let mut replace_operand = |op: &Operand| -> Operand {
         if let Operand::Pseudo(name) = op {
             if !map.contains_key(name) {
-                stack_size -= 8; // Allocate 8 bytes
+                stack_size -= 4; // Allocate 8 bytes
                 map.insert(name.clone(), stack_size);
             }
             Operand::StackQWord(map[name])
